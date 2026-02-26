@@ -3,6 +3,7 @@ import multer from 'multer';
 import { PDFParse } from 'pdf-parse';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
+import { Pool } from 'pg';
 
 const app = express();
 const PORT = 3000;
@@ -11,14 +12,29 @@ app.use(express.json({ limit: '50mb' }));
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Simple In-Memory Vector Store
-interface VectorDocument {
-  id: string;
-  text: string;
-  embedding: number[];
-}
+// Database Connection
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || 'postgres://pdfuser:pdfuser@localhost:5432/pdfagent'
+});
 
-let vectorStore: VectorDocument[] = [];
+// Initialize DB
+async function initDB() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pdf_chunks (
+        id SERIAL PRIMARY KEY,
+        filename TEXT,
+        chunk_index INTEGER,
+        text TEXT,
+        embedding JSONB
+      );
+    `);
+    console.log('Database initialized successfully.');
+  } catch (error) {
+    console.error('Failed to initialize database:', error);
+  }
+}
+initDB();
 
 // Helper: Cosine Similarity
 function cosineSimilarity(vecA: number[], vecB: number[]): number {
@@ -103,7 +119,9 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     const chunks = chunkText(rawText);
 
     // Clear previous vector store for simplicity (1 document at a time)
-    vectorStore = [];
+    await pool.query('TRUNCATE TABLE pdf_chunks');
+
+    let indexedCount = 0;
 
     // Generate embeddings and store
     for (let i = 0; i < chunks.length; i++) {
@@ -117,16 +135,16 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
         embedding = await getGeminiEmbedding(chunk, geminiApiKey);
       }
       
-      vectorStore.push({
-        id: `chunk-${i}`,
-        text: chunk,
-        embedding
-      });
+      await pool.query(
+        'INSERT INTO pdf_chunks (filename, chunk_index, text, embedding) VALUES ($1, $2, $3, $4)',
+        [req.file.originalname, i, chunk, JSON.stringify(embedding)]
+      );
+      indexedCount++;
     }
 
     res.json({ 
       success: true, 
-      message: `Indexed ${vectorStore.length} chunks successfully.` 
+      message: `Indexed ${indexedCount} chunks successfully.` 
     });
   } catch (error: any) {
     console.error('Upload Error:', error);
@@ -145,8 +163,11 @@ app.post('/api/chat', async (req, res) => {
 
     let context = '';
 
+    // Fetch indexed documents from database
+    const { rows } = await pool.query('SELECT text, embedding FROM pdf_chunks');
+
     // If we have indexed documents, perform vector search
-    if (vectorStore.length > 0) {
+    if (rows.length > 0) {
       let queryEmbedding: number[];
       if (provider === 'ollama' && ollamaUrl && embeddingModel) {
         queryEmbedding = await getOllamaEmbedding(message, ollamaUrl, embeddingModel);
@@ -155,8 +176,8 @@ app.post('/api/chat', async (req, res) => {
       }
       
       // Calculate similarities
-      const scoredChunks = vectorStore.map(doc => ({
-        ...doc,
+      const scoredChunks = rows.map(doc => ({
+        text: doc.text,
         score: cosineSimilarity(queryEmbedding, doc.embedding)
       }));
 
