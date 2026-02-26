@@ -61,6 +61,16 @@ async function getOllamaEmbedding(text: string, ollamaUrl: string, model: string
   return data.embedding;
 }
 
+// Helper: Get Embeddings from Gemini
+async function getGeminiEmbedding(text: string): Promise<number[]> {
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const response = await ai.models.embedContent({
+    model: 'text-embedding-004',
+    contents: text,
+  });
+  return response.embeddings[0].values;
+}
+
 // API: Upload PDF and Index
 app.post('/api/upload', upload.single('file'), async (req, res) => {
   try {
@@ -68,9 +78,10 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const { ollamaUrl, embeddingModel } = req.body;
-    if (!ollamaUrl || !embeddingModel) {
-      return res.status(400).json({ error: 'Ollama URL and Embedding Model are required for indexing.' });
+    const { provider, ollamaUrl, embeddingModel } = req.body;
+    
+    if (provider === 'ollama' && (!ollamaUrl || !embeddingModel)) {
+      return res.status(400).json({ error: 'Ollama URL and Embedding Model are required for indexing with Ollama.' });
     }
 
     // Extract text from PDF
@@ -89,7 +100,13 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       const chunk = chunks[i];
       if (chunk.trim().length === 0) continue;
       
-      const embedding = await getOllamaEmbedding(chunk, ollamaUrl, embeddingModel);
+      let embedding: number[];
+      if (provider === 'ollama') {
+        embedding = await getOllamaEmbedding(chunk, ollamaUrl, embeddingModel);
+      } else {
+        embedding = await getGeminiEmbedding(chunk);
+      }
+      
       vectorStore.push({
         id: `chunk-${i}`,
         text: chunk,
@@ -119,8 +136,13 @@ app.post('/api/chat', async (req, res) => {
     let context = '';
 
     // If we have indexed documents, perform vector search
-    if (vectorStore.length > 0 && ollamaUrl && embeddingModel) {
-      const queryEmbedding = await getOllamaEmbedding(message, ollamaUrl, embeddingModel);
+    if (vectorStore.length > 0) {
+      let queryEmbedding: number[];
+      if (provider === 'ollama' && ollamaUrl && embeddingModel) {
+        queryEmbedding = await getOllamaEmbedding(message, ollamaUrl, embeddingModel);
+      } else {
+        queryEmbedding = await getGeminiEmbedding(message);
+      }
       
       // Calculate similarities
       const scoredChunks = vectorStore.map(doc => ({
