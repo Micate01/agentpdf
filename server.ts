@@ -1,12 +1,8 @@
 import express from 'express';
 import multer from 'multer';
-import { createRequire } from 'module';
+import { PDFParse } from 'pdf-parse';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
-
-const require = createRequire(import.meta.url);
-const pdfParseModule = require('pdf-parse');
-const pdfParse = pdfParseModule.default || pdfParseModule;
 
 const app = express();
 const PORT = 3000;
@@ -78,7 +74,8 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     }
 
     // Extract text from PDF
-    const pdfData = await pdfParse(req.file.buffer);
+    const parser = new PDFParse({ data: req.file.buffer });
+    const pdfData = await parser.getText();
     const rawText = pdfData.text;
 
     // Chunk text
