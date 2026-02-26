@@ -41,6 +41,54 @@ async function initDB() {
   }
 }
 
+// Helper: Cosine Similarity
+function cosineSimilarity(vecA: number[], vecB: number[]): number {
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < vecA.length; i++) {
+    dotProduct += vecA[i] * vecB[i];
+    normA += vecA[i] * vecA[i];
+    normB += vecB[i] * vecB[i];
+  }
+  if (normA === 0 || normB === 0) return 0;
+  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
+// Helper: Text Chunker
+function chunkText(text: string, chunkSize = 1000, overlap = 200): string[] {
+  const chunks: string[] = [];
+  let i = 0;
+  while (i < text.length) {
+    chunks.push(text.slice(i, i + chunkSize));
+    i += chunkSize - overlap;
+  }
+  return chunks;
+}
+
+// Helper: Get Embeddings from Ollama
+async function getOllamaEmbedding(text: string, ollamaUrl: string, model: string): Promise<number[]> {
+  const response = await fetch(`${ollamaUrl.replace(/\/$/, '')}/api/embeddings`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model, prompt: text }),
+  });
+  
+  if (!response.ok) {
+    let errorMsg = response.statusText;
+    try {
+      const errorData = await response.json();
+      if (errorData.error) errorMsg = errorData.error;
+    } catch (e) {
+      // Ignore JSON parse error
+    }
+    throw new Error(`Ollama embedding error: ${errorMsg}. Certifique-se de que o modelo '${model}' está instalado (rode 'ollama pull ${model}').`);
+  }
+  
+  const data = await response.json();
+  return data.embedding;
+}
+
 // Start server and initialize DB
 async function startServer() {
   await initDB();
