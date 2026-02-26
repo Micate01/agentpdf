@@ -21,7 +21,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434');
   const [ollamaChatModel, setOllamaChatModel] = useState('qwen2.5-coder:7b');
-  const [ollamaEmbeddingModel, setOllamaEmbeddingModel] = useState('nomic-embed-text');
+  const [ollamaEmbeddingModel, setOllamaEmbeddingModel] = useState('qwen2.5-coder:7b');
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -172,7 +172,7 @@ export default function App() {
                   type="text" 
                   value={ollamaEmbeddingModel} 
                   onChange={(e) => setOllamaEmbeddingModel(e.target.value)}
-                  placeholder="nomic-embed-text"
+                  placeholder="qwen2.5-coder:7b"
                   className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
                 />
                 <p className="text-xs text-zinc-500 mt-1">
