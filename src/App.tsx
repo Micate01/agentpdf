@@ -19,9 +19,8 @@ export default function App() {
 
   // Settings State
   const [showSettings, setShowSettings] = useState(false);
-  const [provider, setProvider] = useState<'gemini' | 'ollama'>('gemini');
   const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434');
-  const [ollamaChatModel, setOllamaChatModel] = useState('llama3');
+  const [ollamaChatModel, setOllamaChatModel] = useState('qwen2.5-coder:7b');
   const [ollamaEmbeddingModel, setOllamaEmbeddingModel] = useState('nomic-embed-text');
 
   const scrollToBottom = () => {
@@ -54,10 +53,8 @@ export default function App() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('provider', provider);
       formData.append('ollamaUrl', ollamaUrl);
       formData.append('embeddingModel', ollamaEmbeddingModel);
-      formData.append('geminiApiKey', process.env.GEMINI_API_KEY || '');
 
       const response = await fetch('/api/upload', {
         method: 'POST',
@@ -106,11 +103,9 @@ export default function App() {
         body: JSON.stringify({
           message: userMessage,
           history,
-          provider,
           ollamaUrl,
           chatModel: ollamaChatModel,
-          embeddingModel: ollamaEmbeddingModel,
-          geminiApiKey: process.env.GEMINI_API_KEY
+          embeddingModel: ollamaEmbeddingModel
         })
       });
 
@@ -152,54 +147,38 @@ export default function App() {
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">Provedor LLM</label>
-                <select 
-                  value={provider} 
-                  onChange={(e) => setProvider(e.target.value as 'gemini' | 'ollama')}
+                <label className="block text-sm font-medium text-zinc-700 mb-1">Ollama URL</label>
+                <input 
+                  type="text" 
+                  value={ollamaUrl} 
+                  onChange={(e) => setOllamaUrl(e.target.value)}
+                  placeholder="http://localhost:11434"
                   className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                >
-                  <option value="gemini">Gemini (Cloud)</option>
-                  <option value="ollama">Ollama (Local)</option>
-                </select>
+                />
               </div>
-
-              {provider === 'ollama' && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-700 mb-1">Ollama URL</label>
-                    <input 
-                      type="text" 
-                      value={ollamaUrl} 
-                      onChange={(e) => setOllamaUrl(e.target.value)}
-                      placeholder="http://localhost:11434"
-                      className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-700 mb-1">Modelo de Chat (Ollama)</label>
-                    <input 
-                      type="text" 
-                      value={ollamaChatModel} 
-                      onChange={(e) => setOllamaChatModel(e.target.value)}
-                      placeholder="llama3"
-                      className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-700 mb-1">Modelo de Embeddings (Ollama)</label>
-                    <input 
-                      type="text" 
-                      value={ollamaEmbeddingModel} 
-                      onChange={(e) => setOllamaEmbeddingModel(e.target.value)}
-                      placeholder="nomic-embed-text"
-                      className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                    />
-                    <p className="text-xs text-zinc-500 mt-1">
-                      Nota: O modelo de embeddings é usado para indexar o PDF.
-                    </p>
-                  </div>
-                </>
-              )}
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">Modelo de Chat (Ollama)</label>
+                <input 
+                  type="text" 
+                  value={ollamaChatModel} 
+                  onChange={(e) => setOllamaChatModel(e.target.value)}
+                  placeholder="qwen2.5-coder:7b"
+                  className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">Modelo de Embeddings (Ollama)</label>
+                <input 
+                  type="text" 
+                  value={ollamaEmbeddingModel} 
+                  onChange={(e) => setOllamaEmbeddingModel(e.target.value)}
+                  placeholder="nomic-embed-text"
+                  className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+                <p className="text-xs text-zinc-500 mt-1">
+                  Nota: O modelo de embeddings é usado para indexar o PDF.
+                </p>
+              </div>
             </div>
             
             <div className="mt-6 flex justify-end">
@@ -271,7 +250,7 @@ export default function App() {
           <div>
             <h2 className="font-medium text-zinc-800">Chat com o Documento</h2>
             <p className="text-xs text-zinc-500 mt-0.5">
-              {provider === 'gemini' ? 'Powered by Gemini 3.1 Pro' : `Powered by Ollama (${ollamaChatModel})`}
+              Powered by Ollama ({ollamaChatModel})
             </p>
           </div>
           <button 
