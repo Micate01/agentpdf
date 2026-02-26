@@ -40,11 +40,8 @@ export default function App() {
     }
 
     setPdfFile(file);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setPdfDataUri(event.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+    const objectUrl = URL.createObjectURL(file);
+    setPdfDataUri(objectUrl);
 
     // Upload to backend for indexing
     setIsIndexing(true);
@@ -76,6 +73,9 @@ export default function App() {
   };
 
   const clearPdf = () => {
+    if (pdfDataUri) {
+      URL.revokeObjectURL(pdfDataUri);
+    }
     setPdfFile(null);
     setPdfDataUri(null);
     setMessages([]);
