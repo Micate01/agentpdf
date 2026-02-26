@@ -54,7 +54,14 @@ async function getOllamaEmbedding(text: string, ollamaUrl: string, model: string
   });
   
   if (!response.ok) {
-    throw new Error(`Ollama embedding error: ${response.statusText}`);
+    let errorMsg = response.statusText;
+    try {
+      const errorData = await response.json();
+      if (errorData.error) errorMsg = errorData.error;
+    } catch (e) {
+      // Ignore JSON parse error
+    }
+    throw new Error(`Ollama embedding error: ${errorMsg}. Certifique-se de que o modelo '${model}' está instalado (rode 'ollama pull ${model}').`);
   }
   
   const data = await response.json();
