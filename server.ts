@@ -20,7 +20,11 @@ const pool = new Pool({
 // Initialize DB
 async function initDB() {
   try {
-    await pool.query(`
+    // Test connection first
+    const client = await pool.connect();
+    console.log('Successfully connected to PostgreSQL database.');
+    
+    await client.query(`
       CREATE TABLE IF NOT EXISTS pdf_chunks (
         id SERIAL PRIMARY KEY,
         filename TEXT,
@@ -29,232 +33,19 @@ async function initDB() {
         embedding JSONB
       );
     `);
-    console.log('Database initialized successfully.');
-  } catch (error) {
-    console.error('Failed to initialize database:', error);
-  }
-}
-initDB();
-
-// Helper: Cosine Similarity
-function cosineSimilarity(vecA: number[], vecB: number[]): number {
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
-  for (let i = 0; i < vecA.length; i++) {
-    dotProduct += vecA[i] * vecB[i];
-    normA += vecA[i] * vecA[i];
-    normB += vecB[i] * vecB[i];
-  }
-  if (normA === 0 || normB === 0) return 0;
-  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
-}
-
-// Helper: Text Chunker
-function chunkText(text: string, chunkSize = 1000, overlap = 200): string[] {
-  const chunks: string[] = [];
-  let i = 0;
-  while (i < text.length) {
-    chunks.push(text.slice(i, i + chunkSize));
-    i += chunkSize - overlap;
-  }
-  return chunks;
-}
-
-// Helper: Get Embeddings from Ollama
-async function getOllamaEmbedding(text: string, ollamaUrl: string, model: string): Promise<number[]> {
-  const response = await fetch(`${ollamaUrl.replace(/\/$/, '')}/api/embeddings`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, prompt: text }),
-  });
-  
-  if (!response.ok) {
-    let errorMsg = response.statusText;
-    try {
-      const errorData = await response.json();
-      if (errorData.error) errorMsg = errorData.error;
-    } catch (e) {
-      // Ignore JSON parse error
-    }
-    throw new Error(`Ollama embedding error: ${errorMsg}. Certifique-se de que o modelo '${model}' está instalado (rode 'ollama pull ${model}').`);
-  }
-  
-  const data = await response.json();
-  return data.embedding;
-}
-
-// Helper: Get Embeddings from Gemini
-async function getGeminiEmbedding(text: string, apiKey: string): Promise<number[]> {
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY is missing.');
-  }
-  const ai = new GoogleGenAI({ apiKey });
-  const response = await ai.models.embedContent({
-    model: 'text-embedding-004',
-    contents: text,
-  });
-  return response.embeddings[0].values;
-}
-
-// API: Upload PDF and Index
-app.post('/api/upload', upload.single('file'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
-    }
-
-    const { provider, ollamaUrl, embeddingModel, geminiApiKey } = req.body;
-    
-    if (provider === 'ollama' && (!ollamaUrl || !embeddingModel)) {
-      return res.status(400).json({ error: 'Ollama URL and Embedding Model are required for indexing with Ollama.' });
-    }
-
-    // Extract text from PDF
-    const parser = new PDFParse({ data: req.file.buffer });
-    const pdfData = await parser.getText();
-    const rawText = pdfData.text;
-
-    // Chunk text
-    const chunks = chunkText(rawText);
-
-    // Clear previous vector store for simplicity (1 document at a time)
-    await pool.query('TRUNCATE TABLE pdf_chunks');
-
-    let indexedCount = 0;
-
-    // Generate embeddings and store
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i];
-      if (chunk.trim().length === 0) continue;
-      
-      let embedding: number[];
-      if (provider === 'ollama') {
-        embedding = await getOllamaEmbedding(chunk, ollamaUrl, embeddingModel);
-      } else {
-        embedding = await getGeminiEmbedding(chunk, geminiApiKey);
-      }
-      
-      await pool.query(
-        'INSERT INTO pdf_chunks (filename, chunk_index, text, embedding) VALUES ($1, $2, $3, $4)',
-        [req.file.originalname, i, chunk, JSON.stringify(embedding)]
-      );
-      indexedCount++;
-    }
-
-    res.json({ 
-      success: true, 
-      message: `Indexed ${indexedCount} chunks successfully.` 
-    });
+    console.log('Table pdf_chunks ensured to exist.');
+    client.release();
   } catch (error: any) {
-    console.error('Upload Error:', error);
-    res.status(500).json({ error: error.message || 'Failed to process PDF' });
+    console.error('CRITICAL: Failed to connect or initialize database.');
+    console.error('Error details:', error.message);
+    console.error('Please ensure PostgreSQL is running, the user "pdfuser" exists with password "pdfuser", and the database "pdfagent" is created.');
   }
-});
+}
 
-// API: Chat with RAG
-app.post('/api/chat', async (req, res) => {
-  try {
-    const { message, history, provider, ollamaUrl, chatModel, embeddingModel, geminiApiKey } = req.body;
-
-    if (!message) {
-      return res.status(400).json({ error: 'Message is required' });
-    }
-
-    let context = '';
-
-    // Fetch indexed documents from database
-    const { rows } = await pool.query('SELECT text, embedding FROM pdf_chunks');
-
-    // If we have indexed documents, perform vector search
-    if (rows.length > 0) {
-      let queryEmbedding: number[];
-      if (provider === 'ollama' && ollamaUrl && embeddingModel) {
-        queryEmbedding = await getOllamaEmbedding(message, ollamaUrl, embeddingModel);
-      } else {
-        queryEmbedding = await getGeminiEmbedding(message, geminiApiKey);
-      }
-      
-      // Calculate similarities
-      const scoredChunks = rows.map(doc => ({
-        text: doc.text,
-        score: cosineSimilarity(queryEmbedding, doc.embedding)
-      }));
-
-      // Sort by score descending and take top 3
-      scoredChunks.sort((a, b) => b.score - a.score);
-      const topChunks = scoredChunks.slice(0, 3);
-      
-      context = topChunks.map(c => c.text).join('\n\n---\n\n');
-    }
-
-    const systemPrompt = `You are a helpful assistant. Use the following context from a PDF document to answer the user's question. If the answer is not in the context, say "I cannot find the answer in the provided document."\n\nContext:\n${context}`;
-
-    if (provider === 'ollama') {
-      if (!ollamaUrl || !chatModel) {
-        return res.status(400).json({ error: 'Ollama URL and Chat Model are required.' });
-      }
-
-      const ollamaMessages = [
-        { role: 'system', content: systemPrompt },
-        ...history.map((m: any) => ({ role: m.role, content: m.text })),
-        { role: 'user', content: message }
-      ];
-
-      const response = await fetch(`${ollamaUrl.replace(/\/$/, '')}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: chatModel,
-          messages: ollamaMessages,
-          stream: false
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Ollama chat error: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      res.json({ reply: data.message.content });
-
-    } else {
-      // Fallback to Gemini
-      const apiKey = geminiApiKey;
-      if (!apiKey) {
-        throw new Error('GEMINI_API_KEY is missing.');
-      }
-      const ai = new GoogleGenAI({ apiKey });
-      
-      const geminiContents = [];
-      
-      // Add context as the first system-like message
-      geminiContents.push({ role: 'user', parts: [{ text: systemPrompt }] });
-      geminiContents.push({ role: 'model', parts: [{ text: 'Understood. I will use the provided context to answer your questions.' }] });
-
-      // Add history
-      for (const msg of history) {
-        geminiContents.push({ role: msg.role, parts: [{ text: msg.text }] });
-      }
-
-      // Add current message
-      geminiContents.push({ role: 'user', parts: [{ text: message }] });
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.1-pro-preview',
-        contents: geminiContents,
-      });
-
-      res.json({ reply: response.text });
-    }
-
-  } catch (error: any) {
-    console.error('Chat Error:', error);
-    res.status(500).json({ error: error.message || 'Failed to generate response' });
-  }
-});
-
+// Start server and initialize DB
 async function startServer() {
+  await initDB();
+  
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
