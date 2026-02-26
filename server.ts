@@ -28,10 +28,19 @@ async function initDB() {
         id SERIAL PRIMARY KEY,
         filename TEXT,
         chunk_index INTEGER,
+        page_number INTEGER,
         text TEXT,
         embedding JSONB
       );
     `);
+    
+    // Add page_number column if it doesn't exist (for existing tables)
+    try {
+      await client.query(`ALTER TABLE pdf_chunks ADD COLUMN page_number INTEGER;`);
+    } catch (e) {
+      // Column might already exist, ignore
+    }
+    
     console.log('Table pdf_chunks ensured to exist.');
     client.release();
   } catch (error: any) {
@@ -55,12 +64,15 @@ function cosineSimilarity(vecA: number[], vecB: number[]): number {
   return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-// Helper: Text Chunker
-function chunkText(text: string, chunkSize = 1000, overlap = 200): string[] {
-  const chunks: string[] = [];
+// Helper: Text Chunker with Page Number
+function chunkTextWithPage(text: string, pageNum: number, chunkSize = 1000, overlap = 200) {
+  const chunks = [];
   let i = 0;
   while (i < text.length) {
-    chunks.push(text.slice(i, i + chunkSize));
+    chunks.push({
+      text: text.slice(i, i + chunkSize),
+      pageNum
+    });
     i += chunkSize - overlap;
   }
   return chunks;
@@ -109,10 +121,18 @@ async function startServer() {
       // Extract text from PDF
       const parser = new PDFParse({ data: req.file.buffer });
       const pdfData = await parser.getText();
-      const rawText = pdfData.text;
 
-      // Chunk text
-      const chunks = chunkText(rawText);
+      // Chunk text per page
+      const allChunks: { text: string, pageNum: number }[] = [];
+      if (pdfData.pages && Array.isArray(pdfData.pages)) {
+        for (const page of pdfData.pages) {
+          const pageChunks = chunkTextWithPage(page.text, page.num);
+          allChunks.push(...pageChunks);
+        }
+      } else {
+        // Fallback if pages array is not available
+        allChunks.push(...chunkTextWithPage(pdfData.text, 1));
+      }
 
       // Clear previous vector store for simplicity (1 document at a time)
       await pool.query('TRUNCATE TABLE pdf_chunks');
@@ -120,15 +140,15 @@ async function startServer() {
       let indexedCount = 0;
 
       // Generate embeddings and store
-      for (let i = 0; i < chunks.length; i++) {
-        const chunk = chunks[i];
-        if (chunk.trim().length === 0) continue;
+      for (let i = 0; i < allChunks.length; i++) {
+        const chunkObj = allChunks[i];
+        if (chunkObj.text.trim().length === 0) continue;
         
-        const embedding = await getOllamaEmbedding(chunk, ollamaUrl, embeddingModel);
+        const embedding = await getOllamaEmbedding(chunkObj.text, ollamaUrl, embeddingModel);
         
         await pool.query(
-          'INSERT INTO pdf_chunks (filename, chunk_index, text, embedding) VALUES ($1, $2, $3, $4)',
-          [req.file.originalname, i, chunk, JSON.stringify(embedding)]
+          'INSERT INTO pdf_chunks (filename, chunk_index, page_number, text, embedding) VALUES ($1, $2, $3, $4, $5)',
+          [req.file.originalname, i, chunkObj.pageNum, chunkObj.text, JSON.stringify(embedding)]
         );
         indexedCount++;
       }
@@ -155,7 +175,7 @@ async function startServer() {
       let context = '';
 
       // Fetch indexed documents from database
-      const { rows } = await pool.query('SELECT text, embedding FROM pdf_chunks');
+      const { rows } = await pool.query('SELECT text, page_number, embedding FROM pdf_chunks');
 
       // If we have indexed documents, perform vector search
       if (rows.length > 0) {
@@ -168,6 +188,7 @@ async function startServer() {
         // Calculate similarities
         const scoredChunks = rows.map(doc => ({
           text: doc.text,
+          pageNum: doc.page_number,
           score: cosineSimilarity(queryEmbedding, doc.embedding)
         }));
 
@@ -175,10 +196,10 @@ async function startServer() {
         scoredChunks.sort((a, b) => b.score - a.score);
         const topChunks = scoredChunks.slice(0, 3);
         
-        context = topChunks.map(c => c.text).join('\n\n---\n\n');
+        context = topChunks.map(c => `[Página ${c.pageNum}]\n${c.text}`).join('\n\n---\n\n');
       }
 
-      const systemPrompt = `You are a helpful assistant. Use the following context from a PDF document to answer the user's question. If the answer is not in the context, say "I cannot find the answer in the provided document."\n\nContext:\n${context}`;
+      const systemPrompt = `You are a helpful assistant. Use the following context from a PDF document to answer the user's question. Always mention the page number where you found the information (e.g., "Na página X..."). If the answer is not in the context, say "I cannot find the answer in the provided document."\n\nContext:\n${context}`;
 
       if (!ollamaUrl || !chatModel) {
         return res.status(400).json({ error: 'Ollama URL and Chat Model are required.' });
