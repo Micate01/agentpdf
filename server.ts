@@ -62,8 +62,11 @@ async function getOllamaEmbedding(text: string, ollamaUrl: string, model: string
 }
 
 // Helper: Get Embeddings from Gemini
-async function getGeminiEmbedding(text: string): Promise<number[]> {
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+async function getGeminiEmbedding(text: string, apiKey: string): Promise<number[]> {
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY is missing.');
+  }
+  const ai = new GoogleGenAI({ apiKey });
   const response = await ai.models.embedContent({
     model: 'text-embedding-004',
     contents: text,
@@ -78,7 +81,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const { provider, ollamaUrl, embeddingModel } = req.body;
+    const { provider, ollamaUrl, embeddingModel, geminiApiKey } = req.body;
     
     if (provider === 'ollama' && (!ollamaUrl || !embeddingModel)) {
       return res.status(400).json({ error: 'Ollama URL and Embedding Model are required for indexing with Ollama.' });
@@ -104,7 +107,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       if (provider === 'ollama') {
         embedding = await getOllamaEmbedding(chunk, ollamaUrl, embeddingModel);
       } else {
-        embedding = await getGeminiEmbedding(chunk);
+        embedding = await getGeminiEmbedding(chunk, geminiApiKey);
       }
       
       vectorStore.push({
@@ -127,7 +130,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 // API: Chat with RAG
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message, history, provider, ollamaUrl, chatModel, embeddingModel } = req.body;
+    const { message, history, provider, ollamaUrl, chatModel, embeddingModel, geminiApiKey } = req.body;
 
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
@@ -141,7 +144,7 @@ app.post('/api/chat', async (req, res) => {
       if (provider === 'ollama' && ollamaUrl && embeddingModel) {
         queryEmbedding = await getOllamaEmbedding(message, ollamaUrl, embeddingModel);
       } else {
-        queryEmbedding = await getGeminiEmbedding(message);
+        queryEmbedding = await getGeminiEmbedding(message, geminiApiKey);
       }
       
       // Calculate similarities
@@ -189,7 +192,11 @@ app.post('/api/chat', async (req, res) => {
 
     } else {
       // Fallback to Gemini
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const apiKey = geminiApiKey;
+      if (!apiKey) {
+        throw new Error('GEMINI_API_KEY is missing.');
+      }
+      const ai = new GoogleGenAI({ apiKey });
       
       const geminiContents = [];
       

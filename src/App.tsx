@@ -57,6 +57,7 @@ export default function App() {
       formData.append('provider', provider);
       formData.append('ollamaUrl', ollamaUrl);
       formData.append('embeddingModel', ollamaEmbeddingModel);
+      formData.append('geminiApiKey', process.env.GEMINI_API_KEY || '');
 
       const response = await fetch('/api/upload', {
         method: 'POST',
@@ -108,7 +109,8 @@ export default function App() {
           provider,
           ollamaUrl,
           chatModel: ollamaChatModel,
-          embeddingModel: ollamaEmbeddingModel
+          embeddingModel: ollamaEmbeddingModel,
+          geminiApiKey: process.env.GEMINI_API_KEY
         })
       });
 
