@@ -15,6 +15,7 @@ export default function App() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isIndexing, setIsIndexing] = useState(false);
+  const [indexProgress, setIndexProgress] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Settings State
@@ -45,6 +46,7 @@ export default function App() {
 
     // Upload to backend for indexing
     setIsIndexing(true);
+    setIndexProgress(0);
     setMessages([{ role: 'model', text: 'Processando e indexando o PDF...', isGreeting: true }]);
 
     try {
@@ -59,16 +61,47 @@ export default function App() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Falha ao indexar o PDF');
+        throw new Error('Falha ao conectar com o servidor para indexação');
       }
 
-      setMessages([{ role: 'model', text: 'PDF indexado com sucesso! O que você gostaria de saber sobre ele?', isGreeting: true }]);
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const data = JSON.parse(line);
+              if (data.status === 'progress') {
+                setIndexProgress(data.progress);
+              } else if (data.status === 'error') {
+                throw new Error(data.error);
+              } else if (data.status === 'complete') {
+                setMessages([{ role: 'model', text: 'PDF indexado com sucesso! O que você gostaria de saber sobre ele?', isGreeting: true }]);
+              }
+            } catch (e: any) {
+              if (e.message !== 'Unexpected end of JSON input') {
+                console.error('Error parsing stream line:', e);
+              }
+            }
+          }
+        }
+      }
     } catch (error: any) {
       console.error(error);
       setMessages([{ role: 'model', text: `Erro ao processar PDF: ${error.message}`, isGreeting: true }]);
     } finally {
       setIsIndexing(false);
+      setIndexProgress(0);
     }
   };
 
@@ -216,7 +249,7 @@ export default function App() {
               `}>
                 <span className={`w-1.5 h-1.5 rounded-full
                   ${!isIndexing ? 'bg-green-500' : 'bg-amber-500 animate-pulse'}`} />
-                {!isIndexing ? 'READY' : 'PROCESSING'}
+                {!isIndexing ? 'READY' : `PROCESSING ${indexProgress}%`}
               </span>
             </div>
           )}
@@ -346,7 +379,7 @@ export default function App() {
                     <div className="bg-white border border-slate-200 rounded-2xl px-5 py-4 shadow-sm flex items-center gap-3">
                       <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
                       <span className="text-sm text-slate-500 font-medium">
-                        {isIndexing ? 'Extraindo e indexando texto...' : 'Analisando documento...'}
+                        {isIndexing ? `Extraindo e indexando texto... ${indexProgress}%` : 'Analisando documento...'}
                       </span>
                     </div>
                   </div>

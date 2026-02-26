@@ -107,16 +107,23 @@ async function startServer() {
   
   // API: Upload PDF and Index
   app.post('/api/upload', upload.single('file'), async (req, res) => {
+    res.setHeader('Content-Type', 'application/x-ndjson');
+    res.setHeader('Transfer-Encoding', 'chunked');
+
     try {
       if (!req.file) {
-        return res.status(400).json({ error: 'No file uploaded' });
+        res.write(JSON.stringify({ status: 'error', error: 'No file uploaded' }) + '\n');
+        return res.end();
       }
 
       const { ollamaUrl, embeddingModel } = req.body;
       
       if (!ollamaUrl || !embeddingModel) {
-        return res.status(400).json({ error: 'Ollama URL and Embedding Model are required for indexing with Ollama.' });
+        res.write(JSON.stringify({ status: 'error', error: 'Ollama URL and Embedding Model are required for indexing with Ollama.' }) + '\n');
+        return res.end();
       }
+
+      res.write(JSON.stringify({ status: 'parsing', message: 'Extracting text from PDF...' }) + '\n');
 
       // Extract text from PDF
       const parser = new PDFParse({ data: req.file.buffer });
@@ -138,28 +145,36 @@ async function startServer() {
       await pool.query('TRUNCATE TABLE pdf_chunks');
 
       let indexedCount = 0;
+      const totalChunks = allChunks.length;
 
-      // Generate embeddings and store
-      for (let i = 0; i < allChunks.length; i++) {
-        const chunkObj = allChunks[i];
-        if (chunkObj.text.trim().length === 0) continue;
-        
-        const embedding = await getOllamaEmbedding(chunkObj.text, ollamaUrl, embeddingModel);
-        
-        await pool.query(
-          'INSERT INTO pdf_chunks (filename, chunk_index, page_number, text, embedding) VALUES ($1, $2, $3, $4, $5)',
-          [req.file.originalname, i, chunkObj.pageNum, chunkObj.text, JSON.stringify(embedding)]
-        );
-        indexedCount++;
+      if (totalChunks === 0) {
+        res.write(JSON.stringify({ status: 'complete', message: 'No text found in PDF.' }) + '\n');
+        return res.end();
       }
 
-      res.json({ 
-        success: true, 
-        message: `Indexed ${indexedCount} chunks successfully.` 
-      });
+      // Generate embeddings and store
+      for (let i = 0; i < totalChunks; i++) {
+        const chunkObj = allChunks[i];
+        if (chunkObj.text.trim().length > 0) {
+          const embedding = await getOllamaEmbedding(chunkObj.text, ollamaUrl, embeddingModel);
+          
+          await pool.query(
+            'INSERT INTO pdf_chunks (filename, chunk_index, page_number, text, embedding) VALUES ($1, $2, $3, $4, $5)',
+            [req.file.originalname, i, chunkObj.pageNum, chunkObj.text, JSON.stringify(embedding)]
+          );
+          indexedCount++;
+        }
+        
+        const progress = Math.round(((i + 1) / totalChunks) * 100);
+        res.write(JSON.stringify({ status: 'progress', progress, current: i + 1, total: totalChunks }) + '\n');
+      }
+
+      res.write(JSON.stringify({ status: 'complete', message: `Indexed ${indexedCount} chunks successfully.` }) + '\n');
+      res.end();
     } catch (error: any) {
       console.error('Upload Error:', error);
-      res.status(500).json({ error: error.message || 'Failed to process PDF' });
+      res.write(JSON.stringify({ status: 'error', error: error.message || 'Failed to process PDF' }) + '\n');
+      res.end();
     }
   });
 
