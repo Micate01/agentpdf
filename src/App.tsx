@@ -132,50 +132,50 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 flex flex-col md:flex-row font-sans relative">
+    <div className="flex h-screen bg-slate-50 font-sans relative">
       {/* Settings Modal */}
       {showSettings && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 relative">
             <button 
               onClick={() => setShowSettings(false)}
-              className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
             >
               <X className="w-5 h-5" />
             </button>
-            <h2 className="text-xl font-semibold mb-4 text-zinc-800">Configurações</h2>
+            <h2 className="text-xl font-semibold mb-4 text-slate-800">Configurações</h2>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">Ollama URL</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Ollama URL</label>
                 <input 
                   type="text" 
                   value={ollamaUrl} 
                   onChange={(e) => setOllamaUrl(e.target.value)}
                   placeholder="http://localhost:11434"
-                  className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">Modelo de Chat (Ollama)</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Modelo de Chat (Ollama)</label>
                 <input 
                   type="text" 
                   value={ollamaChatModel} 
                   onChange={(e) => setOllamaChatModel(e.target.value)}
                   placeholder="qwen2.5-coder:7b"
-                  className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">Modelo de Embeddings (Ollama)</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Modelo de Embeddings (Ollama)</label>
                 <input 
                   type="text" 
                   value={ollamaEmbeddingModel} 
                   onChange={(e) => setOllamaEmbeddingModel(e.target.value)}
                   placeholder="qwen2.5-coder:7b"
-                  className="w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
                 />
-                <p className="text-xs text-zinc-500 mt-1">
+                <p className="text-xs text-slate-500 mt-1">
                   Nota: O modelo de embeddings é usado para indexar o PDF.
                 </p>
               </div>
@@ -184,7 +184,7 @@ export default function App() {
             <div className="mt-6 flex justify-end">
               <button 
                 onClick={() => setShowSettings(false)}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium"
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium text-sm transition-colors"
               >
                 Salvar
               </button>
@@ -193,137 +193,192 @@ export default function App() {
         </div>
       )}
 
-      {/* Left Panel: PDF Preview */}
-      <div className="w-full md:w-1/2 h-[50vh] md:h-screen border-b md:border-b-0 md:border-r border-zinc-200 bg-zinc-100 flex flex-col">
-        <div className="p-4 bg-white border-b border-zinc-200 flex items-center justify-between shadow-sm z-10">
-          <div className="flex items-center gap-2 text-zinc-800 font-medium">
-            <FileText className="w-5 h-5 text-indigo-600" />
-            <h2>Visualizador de PDF</h2>
-          </div>
-          <div className="flex items-center gap-2">
-            {pdfFile && (
-              <button
-                onClick={clearPdf}
-                className="p-2 text-zinc-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                title="Remover PDF"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
-          </div>
+      {/* Sidebar */}
+      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0">
+        <div className="p-5 border-b border-slate-100">
+          <h1 className="text-lg font-bold text-slate-900">PDF Agent</h1>
+          <p className="text-xs text-slate-400 mt-0.5">Ask your documents anything</p>
         </div>
-        
-        <div className="flex-1 overflow-hidden relative flex items-center justify-center bg-zinc-100/50">
-          {!pdfDataUri ? (
-            <div className="text-center p-8">
-              <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm border border-zinc-200">
-                <FileUp className="w-8 h-8 text-indigo-500" />
+
+        <div className="flex-1 p-4">
+          {pdfFile && (
+            <div className="rounded-xl bg-slate-50 border border-slate-200 p-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Current doc</span>
+                <button onClick={clearPdf} className="text-xs text-slate-400 hover:text-red-400 transition-colors">
+                  Change
+                </button>
               </div>
-              <h3 className="text-lg font-medium text-zinc-900 mb-2">Nenhum PDF selecionado</h3>
-              <p className="text-zinc-500 mb-6 max-w-sm mx-auto">
-                Faça o upload de um documento PDF para começar a fazer perguntas sobre o seu conteúdo.
-              </p>
-              <label className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors cursor-pointer font-medium shadow-sm">
-                <Upload className="w-4 h-4" />
-                Selecionar Arquivo PDF
-                <input
-                  type="file"
-                  accept="application/pdf"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-              </label>
+              <p className="text-sm text-slate-700 font-medium truncate" title={pdfFile.name}>{pdfFile.name}</p>
+              <span className={`
+                inline-flex items-center gap-1 mt-1.5 text-xs px-2 py-0.5 rounded-full font-medium
+                ${!isIndexing ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}
+              `}>
+                <span className={`w-1.5 h-1.5 rounded-full
+                  ${!isIndexing ? 'bg-green-500' : 'bg-amber-500 animate-pulse'}`} />
+                {!isIndexing ? 'READY' : 'PROCESSING'}
+              </span>
             </div>
-          ) : (
-            <iframe
-              src={`${pdfDataUri}#toolbar=0`}
-              className="w-full h-full border-none"
-              title="PDF Preview"
-            />
           )}
         </div>
-      </div>
 
-      {/* Right Panel: Chat Interface */}
-      <div className="w-full md:w-1/2 h-[50vh] md:h-screen flex flex-col bg-white">
-        <div className="p-4 border-b border-zinc-200 bg-white shadow-sm z-10 flex justify-between items-center">
-          <div>
-            <h2 className="font-medium text-zinc-800">Chat com o Documento</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">
-              Powered by Ollama ({ollamaChatModel})
-            </p>
-          </div>
+        <div className="p-4 border-t border-slate-100 text-xs text-slate-400 space-y-3">
           <button 
-            onClick={() => setShowSettings(true)}
-            className="p-2 text-zinc-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-            title="Configurações"
+            onClick={() => setShowSettings(true)} 
+            className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors w-full font-medium"
           >
-            <Settings className="w-5 h-5" />
+            <Settings className="w-4 h-4" /> Configurações
           </button>
+          <div className="pt-3 border-t border-slate-100 space-y-0.5 text-slate-300">
+            <p>Running on Ollama + {ollamaChatModel}</p>
+            <p>pgvector · Express · React</p>
+          </div>
         </div>
+      </aside>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-zinc-50/50">
-          {messages.length === 0 && !pdfFile ? (
-            <div className="h-full flex items-center justify-center text-zinc-400 text-sm">
-              Faça o upload de um PDF primeiro.
+      {/* Main area */}
+      <main className="flex-1 flex flex-row overflow-hidden">
+        {!pdfFile ? (
+          <div className="flex flex-col items-center justify-center h-full p-8 w-full">
+            <div
+              className={`
+                w-full max-w-lg border-2 border-dashed rounded-2xl p-12
+                flex flex-col items-center gap-4 transition-all duration-200 cursor-pointer
+                border-slate-300 bg-slate-50 hover:border-indigo-300 hover:bg-indigo-50/40
+              `}
+              onClick={() => document.getElementById('pdf-input')?.click()}
+            >
+              <div className="w-16 h-16 bg-indigo-100 rounded-2xl flex items-center justify-center">
+                <svg className="w-8 h-8 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+
+              <div className="text-center">
+                <p className="text-lg font-semibold text-slate-700">
+                  {isIndexing ? 'Uploading & Indexing…' : 'Drop your PDF here'}
+                </p>
+                <p className="text-sm text-slate-400 mt-1">or click to browse · max 50 MB</p>
+              </div>
+
+              {isIndexing && (
+                <div className="w-full bg-slate-200 rounded-full h-1.5 mt-2">
+                  <div className="bg-indigo-500 h-1.5 rounded-full animate-pulse w-2/3" />
+                </div>
+              )}
             </div>
-          ) : (
-            messages.map((msg, idx) => (
-              <div
-                key={idx}
-                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className={`max-w-[85%] rounded-2xl px-5 py-3.5 ${
-                    msg.role === 'user'
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'bg-white border border-zinc-200 text-zinc-800 shadow-sm'
-                  }`}
-                >
-                  {msg.role === 'user' ? (
-                    <p className="whitespace-pre-wrap">{msg.text}</p>
-                  ) : (
-                    <div className="markdown-body text-sm leading-relaxed">
-                      <Markdown>{msg.text}</Markdown>
-                    </div>
-                  )}
+            <input
+              id="pdf-input"
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              onChange={handleFileUpload}
+              disabled={isIndexing}
+            />
+          </div>
+        ) : (
+          <>
+            {/* PDF Viewer */}
+            <div className="flex-1 border-r border-slate-200 bg-slate-100/50 flex flex-col relative">
+              {pdfDataUri && (
+                <iframe
+                  src={`${pdfDataUri}#toolbar=0`}
+                  className="w-full h-full border-none"
+                  title="PDF Preview"
+                />
+              )}
+            </div>
+
+            {/* Chat Window */}
+            <div className="w-[450px] flex flex-col bg-white shrink-0">
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-slate-200 bg-white flex items-center gap-3 shrink-0">
+                <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
+                  <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-800 truncate">{pdfFile.name}</p>
+                  <p className="text-xs text-slate-400">Ask anything about this document</p>
                 </div>
               </div>
-            ))
-          )}
-          {(isLoading || isIndexing) && (
-            <div className="flex justify-start">
-              <div className="bg-white border border-zinc-200 rounded-2xl px-5 py-4 shadow-sm flex items-center gap-3">
-                <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
-                <span className="text-sm text-zinc-500 font-medium">
-                  {isIndexing ? 'Extraindo e indexando texto...' : 'Analisando documento...'}
-                </span>
+
+              {/* Message list */}
+              <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4 bg-slate-50/50">
+                {messages.length === 0 && (
+                  <div className="flex flex-col items-center justify-center h-full text-center text-slate-400 gap-2">
+                    <svg className="w-10 h-10 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                            d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    <p className="text-sm">Start by asking a question about the document.</p>
+                  </div>
+                )}
+
+                {messages.map((msg, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className={`max-w-[85%] rounded-2xl px-5 py-3.5 ${
+                        msg.role === 'user'
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'bg-white border border-slate-200 text-slate-800 shadow-sm'
+                      }`}
+                    >
+                      {msg.role === 'user' ? (
+                        <p className="whitespace-pre-wrap text-sm">{msg.text}</p>
+                      ) : (
+                        <div className="markdown-body text-sm leading-relaxed">
+                          <Markdown>{msg.text}</Markdown>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {(isLoading || isIndexing) && (
+                  <div className="flex justify-start">
+                    <div className="bg-white border border-slate-200 rounded-2xl px-5 py-4 shadow-sm flex items-center gap-3">
+                      <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+                      <span className="text-sm text-slate-500 font-medium">
+                        {isIndexing ? 'Extraindo e indexando texto...' : 'Analisando documento...'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Input area */}
+              <div className="border-t border-slate-200 bg-white px-4 py-3 shrink-0">
+                <form onSubmit={handleSubmit} className="flex gap-2 items-end">
+                  <input
+                    type="text"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder="Ask a question about the document…"
+                    disabled={isLoading || isIndexing}
+                    className="flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all disabled:opacity-50 disabled:bg-slate-50"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!input.trim() || isLoading || isIndexing}
+                    className="shrink-0 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Send
+                  </button>
+                </form>
+                <p className="text-xs text-slate-400 mt-1.5 ml-1">Enter to send</p>
               </div>
             </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-
-        <div className="p-4 bg-white border-t border-zinc-200">
-          <form onSubmit={handleSubmit} className="relative flex items-center">
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={pdfFile ? "Faça uma pergunta sobre o PDF..." : "Faça upload de um PDF primeiro..."}
-              disabled={!pdfFile || isLoading || isIndexing}
-              className="w-full pl-4 pr-12 py-3.5 bg-zinc-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed outline-none"
-            />
-            <button
-              type="submit"
-              disabled={!input.trim() || !pdfFile || isLoading || isIndexing}
-              className="absolute right-2 p-2 text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-300 disabled:text-zinc-500 rounded-lg transition-colors"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </form>
-        </div>
-      </div>
+          </>
+        )}
+      </main>
     </div>
   );
 }
